@@ -19,5 +19,8 @@
     "express": "^5.2.1",
     "ssl-checker": "^3.0.1",
     "whois-json": "^2.0.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
