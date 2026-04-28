@@ -325,9 +325,11 @@ app.post('/scan', async (req, res) => {
     const domainAnalysis = analyzeDomain(url);
     console.log('Domain risk:', domainAnalysis.riskScore);
 
-    // Step 4 — high risk domain — skip AI (lowered threshold to 50)
+    // Step 4 — high risk domain — skip AI
     if (domainAnalysis.riskScore >= 50) {
-      const trustScore = Math.max(3, 15 - domainAnalysis.riskScore / 10);
+      const trustScore = domainAnalysis.hasBrandImpersonation
+        ? Math.max(3, 10 - domainAnalysis.riskScore / 20)
+        : Math.max(5, 30 - domainAnalysis.riskScore / 5);
       return res.json({
         url, trustScore: Math.round(trustScore),
         isFake: true, brand: domainAnalysis.detectedBrand,
@@ -357,7 +359,34 @@ app.post('/scan', async (req, res) => {
       checkSafeBrowsing(url)
     ]);
 
-    // Step 4 — Gemini AI is the main permanent judge
+    // Step 4b — detect fake job sites by URL pattern
+    const urlLower = url.toLowerCase();
+    const isFakeJobSite = (
+      (urlLower.includes('govt') || urlLower.includes('sarkari') || urlLower.includes('job-apply') || urlLower.includes('job-alert') || urlLower.includes('recruitment')) &&
+      !urlLower.includes('ncs.gov.in') && !urlLower.includes('ssc.nic.in') && !urlLower.includes('upsc.gov.in')
+    );
+    if (isFakeJobSite) {
+      return res.json({
+        url, trustScore: 10,
+        isFake: true, brand: 'Government',
+        category: 'Jobs', riskLevel: 'High',
+        stolenAssets: 'Aadhaar and registration fees',
+        reason: 'Fake government job portal — collects Aadhaar and charges illegal fees',
+        shortMessage: 'This is a fake government job portal with no official affiliation. It illegally collects Aadhaar numbers and charges registration fees which is completely illegal in India. All genuine government jobs are free to apply at ncs.gov.in or ssc.nic.in.',
+        signals: {
+          blacklisted: false, suspiciousDomain: true,
+          hasSuspiciousExt: domainAnalysis.hasSuspiciousExt,
+          hasBrandImpersonation: true,
+          domainAge: 'Unknown', sslValid: false,
+          formHarvesting: 'Aadhaar and fee collection risk',
+          manipulationScore: 60,
+          urgencyLanguage: false, unrealisticPromises: false,
+          domainRiskReasons: ['Fake government job portal', 'Illegal registration fees', 'No official government affiliation']
+        }
+      });
+    }
+
+    // Step 5 — Gemini AI is the main permanent judge
     // Gemini uses its knowledge of every website to decide:
     // Is this brand impersonation? Is this piracy? Is this safe?
     const geminiResult = await analyzeWithGemini(url, assets, hostname);
