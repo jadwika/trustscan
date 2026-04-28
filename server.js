@@ -325,8 +325,8 @@ app.post('/scan', async (req, res) => {
     const domainAnalysis = analyzeDomain(url);
     console.log('Domain risk:', domainAnalysis.riskScore);
 
-    // Step 4 — very high risk domain — skip AI
-    if (domainAnalysis.riskScore >= 80) {
+    // Step 4 — high risk domain — skip AI (lowered threshold to 50)
+    if (domainAnalysis.riskScore >= 50) {
       const trustScore = Math.max(3, 15 - domainAnalysis.riskScore / 10);
       return res.json({
         url, trustScore: Math.round(trustScore),
@@ -404,7 +404,10 @@ app.post('/scan', async (req, res) => {
     }
 
     // Step 6 — apply additional safety checks on top of Gemini score
-    let trustScore = geminiResult.trustScore;
+    // Fix: ensure gemini score is never 0 or undefined
+    let trustScore = (geminiResult.trustScore && geminiResult.trustScore > 0)
+      ? geminiResult.trustScore
+      : domainAnalysis.hasBrandImpersonation ? 8 : 40;
 
     if (isBlacklisted) trustScore = Math.min(trustScore, 5);
     if (assets.formHarvesting.hasAadhaar) trustScore -= 30;
