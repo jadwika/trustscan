@@ -211,6 +211,18 @@ trustScore above 80.
 If you genuinely do not know this site and it shows no fraud signals = Medium trust.
 trustScore between 40 and 60.
 
+CRITICAL RULE — BRAND IMPERSONATION (highest priority):
+If the hostname contains any known brand name like sbi, flipkart, myntra, hdfc,
+icici, axis, paytm, phonepe, amazon, meesho, nykaa, swiggy, zomato, bigbasket,
+makemytrip, irctc, upsc, ncs, google, youtube, instagram, whatsapp, netflix
+BUT is NOT the official domain = FRAUD. trustScore MUST be below 10. No exceptions.
+Examples of what to flag:
+sbi-kyc-update.xyz = SBI impersonation = trustScore 5
+flipkart-sale.online = Flipkart impersonation = trustScore 5
+myntra-clearance.in = Myntra impersonation = trustScore 8
+govt-job-apply.net = Government job fraud = trustScore 10
+sarkari-result.xyz = Fake government job = trustScore 10
+
 Respond ONLY in this exact JSON format:
 {
   "isFake": true or false,
@@ -321,21 +333,37 @@ app.post('/scan', async (req, res) => {
     const geminiResult = await analyzeWithGemini(url, assets, hostname);
 
     if (!geminiResult) {
-      // Gemini failed — fallback response
+      // Gemini failed — use domain analysis for accurate score
+      const domainTrust = Math.max(0, 100 - domainAnalysis.riskScore);
+      const fallbackScore = domainAnalysis.hasBrandImpersonation
+        ? Math.min(domainTrust, 10)
+        : domainAnalysis.riskScore >= 50
+        ? Math.min(domainTrust, 25)
+        : Math.min(domainTrust, 45);
+
       return res.json({
-        url, trustScore: 50,
-        isFake: false, brand: null,
-        category: detectCategory(url), riskLevel: 'Medium',
-        stolenAssets: 'none',
-        reason: 'Could not complete full analysis — proceed with caution',
-        shortMessage: 'We could not fully analyse this website. Please proceed with caution and avoid sharing personal details or making payments until you verify this site is legitimate.',
+        url, trustScore: Math.round(fallbackScore),
+        isFake: domainAnalysis.hasBrandImpersonation || fallbackScore < 30,
+        brand: domainAnalysis.detectedBrand,
+        category: detectCategory(url),
+        riskLevel: fallbackScore < 30 ? 'High' : 'Medium',
+        stolenAssets: domainAnalysis.hasBrandImpersonation
+          ? `${domainAnalysis.detectedBrand} brand assets stolen`
+          : 'none',
+        reason: domainAnalysis.reasons.join(' · ') || 'Suspicious domain signals detected',
+        shortMessage: domainAnalysis.hasBrandImpersonation
+          ? `This site is impersonating ${domainAnalysis.detectedBrand} to steal your personal and financial details. It has no connection to the real ${domainAnalysis.detectedBrand}. Do not enter any payment information or personal details.`
+          : `This website shows suspicious signals and could not be fully analysed. Proceed with extreme caution and avoid sharing personal details or making any payments.`,
         signals: {
-          blacklisted: isBlacklisted, suspiciousDomain: false,
-          hasSuspiciousExt: false, hasBrandImpersonation: false,
-          domainAge: 'Unknown', sslValid: true, sslIssuer: 'Unknown',
-          formHarvesting: 'Not checked', manipulationScore: 0,
+          blacklisted: isBlacklisted,
+          suspiciousDomain: domainAnalysis.riskScore > 30,
+          hasSuspiciousExt: domainAnalysis.hasSuspiciousExt,
+          hasBrandImpersonation: domainAnalysis.hasBrandImpersonation,
+          domainAge: 'Unknown', sslValid: false, sslIssuer: 'Unknown',
+          formHarvesting: 'Could not check',
+          manipulationScore: 0,
           urgencyLanguage: false, unrealisticPromises: false,
-          domainRiskReasons: []
+          domainRiskReasons: domainAnalysis.reasons
         }
       });
     }
