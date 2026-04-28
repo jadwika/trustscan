@@ -21,7 +21,6 @@ async function startScan() {
   const raw = document.getElementById('urlInput').value.trim();
   if (!raw) return;
 
-  // Validate it looks like a real URL
   const urlPattern = /^(https?:\/\/)?([\w-]+\.)+[\w]{2,}(\/.*)?$/i;
   if (!urlPattern.test(raw)) {
     const em = document.getElementById('errorMsg');
@@ -31,15 +30,12 @@ async function startScan() {
     return;
   }
 
-  // Auto-add https:// if missing
   const url = raw.startsWith('http') ? raw : 'https://' + raw;
   document.getElementById('urlInput').value = url;
 
-  // Hide previous results
   document.getElementById('result').classList.remove('on');
   document.getElementById('errorMsg').classList.remove('on');
 
-  // Remove old injected elements
   const oldMsg = document.getElementById('shortMsgBox');
   if (oldMsg) oldMsg.remove();
   const oldBtn = document.getElementById('viewAnalysisBtn');
@@ -47,7 +43,6 @@ async function startScan() {
   const oldAnalysis = document.getElementById('analysisSection');
   if (oldAnalysis) oldAnalysis.remove();
 
-  // Show progress bar
   const sp = document.getElementById('scanProg');
   sp.classList.add('on');
   document.getElementById('scanUrl').textContent = url;
@@ -121,10 +116,14 @@ function typeMessage(element, text, callback) {
 }
 
 function showResult(data) {
-  const score = data.trustScore;
+  // FIX: ensure score is always a valid number
+  const score = (data.trustScore !== undefined && data.trustScore !== null)
+    ? Number(data.trustScore)
+    : 0;
+
   const result = document.getElementById('result');
 
-  // Score circle — stays colored
+  // Score circle — always shows the number
   const sc = document.getElementById('scoreCircle');
   sc.textContent = score;
   if (score >= 60) sc.className = 'score-circle sc-safe';
@@ -158,14 +157,11 @@ function showResult(data) {
   rv.className = 'res-verdict ' + vcls;
   document.getElementById('catBadge').innerHTML = `<div class="cat-badge">${data.category || 'Website'}</div>`;
 
-  // Clear grids — shown only after View Analysis click
   document.getElementById('sigGrid').innerHTML = '';
   document.getElementById('detList').innerHTML = '';
 
-  // Show result card
   result.classList.add('on');
 
-  // Inject WHITE message box with dot + typing
   if (data.shortMessage) {
     let labelColor, msgLabel;
 
@@ -206,27 +202,21 @@ function showResult(data) {
     const resultTop = document.querySelector('.result-top');
     resultTop.insertAdjacentElement('afterend', msgBox);
 
-    // Fade in message box
     setTimeout(() => {
       msgBox.style.opacity = '1';
-
-      // Start typing while dot is still animating
       const typingEl = document.getElementById('typingText');
       typeMessage(typingEl, data.shortMessage, () => {
-        // Stop dot animation after typing done
         const dot = document.getElementById('msgDot');
         if (dot) {
           dot.style.animation = 'none';
           dot.style.background = '#4CAF82';
           dot.style.transform = 'scale(1)';
         }
-        // Show View Analysis button
         showViewAnalysisButton(data, score, msgBox);
       });
     }, 300);
   }
 
-  // Footer
   document.getElementById('footTxt').textContent =
     data.category === 'Piracy'
       ? '⚠️ Visiting piracy sites is illegal in India — use JioCinema, Hotstar or Netflix instead'
@@ -287,11 +277,9 @@ function showFullAnalysis(btn) {
   const data = window._lastScanData;
   const score = window._lastScanScore;
 
-  // Hide button
   const btnWrap = document.getElementById('viewAnalysisBtn');
   if (btnWrap) btnWrap.style.display = 'none';
 
-  // Remove old analysis
   const oldAnalysis = document.getElementById('analysisSection');
   if (oldAnalysis) oldAnalysis.remove();
 
