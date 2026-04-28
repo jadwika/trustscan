@@ -18,8 +18,22 @@ document.querySelectorAll('.cat-chip').forEach(c => {
 });
 
 async function startScan() {
-  const url = document.getElementById('urlInput').value.trim();
-  if (!url) return;
+  const raw = document.getElementById('urlInput').value.trim();
+  if (!raw) return;
+
+  // Validate it looks like a real URL
+  const urlPattern = /^(https?:\/\/)?([\w-]+\.)+[\w]{2,}(\/.*)?$/i;
+  if (!urlPattern.test(raw)) {
+    const em = document.getElementById('errorMsg');
+    em.textContent = '⚠️ Please enter a valid website URL — Example: https://flipkart.com or sbi-kyc-update.xyz';
+    em.classList.add('on');
+    document.getElementById('result').classList.remove('on');
+    return;
+  }
+
+  // Auto-add https:// if missing
+  const url = raw.startsWith('http') ? raw : 'https://' + raw;
+  document.getElementById('urlInput').value = url;
 
   // Hide previous results
   document.getElementById('result').classList.remove('on');
