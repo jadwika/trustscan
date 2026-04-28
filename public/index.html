@@ -54,15 +54,24 @@
     .scanner-body{max-width:780px;margin:36px auto 0;padding:0 16px}
     .error-msg{background:#ffebee;border:1px solid #ffcdd2;color:#c62828;padding:12px 16px;border-radius:12px;font-size:13px;margin-bottom:12px;display:none;font-family:'Inter',sans-serif}
     .error-msg.on{display:block}
+
+    /* DOT LOADER */
     .scan-progress{display:none;background:var(--white);border:1px solid var(--border);border-radius:16px;padding:24px;text-align:center;box-shadow:0 4px 20px rgba(76,175,130,.08)}
     .scan-progress.on{display:block}
     .scan-url{font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px;font-family:'Space Grotesk',sans-serif}
-    .prog-steps{display:flex;justify-content:space-between;margin-bottom:8px}
-    .prog-step{font-size:10px;color:var(--muted);opacity:.35;transition:opacity .3s;letter-spacing:.03em;font-family:'Inter',sans-serif}
-    .prog-step.done{opacity:1;color:var(--g1);font-weight:600}
-    .prog-track{height:4px;background:var(--light1);border-radius:2px;overflow:hidden;margin-bottom:10px}
-    .prog-fill{height:4px;background:var(--grad2);border-radius:2px;width:0;transition:width .45s ease}
-    .prog-label{font-size:13px;color:var(--muted);font-weight:300;font-family:'Inter',sans-serif}
+    .ts-dot-loader{
+      display:inline-block;
+      width:14px;height:14px;
+      border-radius:50%;
+      animation:tsColorCycle 1.2s infinite ease-in-out;
+    }
+    @keyframes tsColorCycle{
+      0%  { background:#4CAF82; transform:scale(1); }
+      33% { background:#5BBFB5; transform:scale(1.2); }
+      66% { background:#7B9FE0; transform:scale(1); }
+      100%{ background:#4CAF82; transform:scale(1); }
+    }
+
     .result{display:none;background:var(--white);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(76,175,130,.1)}
     .result.on{display:block}
     .result-top{padding:20px 22px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--border)}
@@ -75,7 +84,6 @@
     .res-verdict{font-size:13px;font-weight:500;margin-top:5px;font-family:'Inter',sans-serif}
     .v-safe{color:#2e7d32}.v-warn{color:#e65100}.v-danger{color:#c62828}
     .cat-badge{display:inline-flex;align-items:center;gap:5px;background:var(--light1);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;margin-top:6px;color:var(--g1);font-family:'Inter',sans-serif}
-    /* 3 COLUMN GRID FOR 6 SIGNALS */
     .sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;padding:16px 22px;gap:10px;border-bottom:1px solid var(--border)}
     .sig{background:#f4fbf8;border-radius:12px;padding:11px 13px;border:1px solid var(--border)}
     .sig-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;font-family:'Inter',sans-serif;font-weight:600}
@@ -96,9 +104,6 @@
     .t-danger{background:#ffebee;color:#c62828}
     .res-foot{padding:12px 22px;background:#f4fbf8;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border)}
     .foot-txt{font-size:11px;color:var(--muted);font-family:'Inter',sans-serif;flex:1}
-    .glossy-btn{position:relative;background:var(--grad);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;overflow:hidden;transition:all .2s;box-shadow:0 4px 14px rgba(76,175,130,.35);white-space:nowrap;margin-left:12px}
-    .glossy-btn::before{content:'';position:absolute;top:0;left:0;right:0;height:50%;background:linear-gradient(180deg,rgba(255,255,255,.22),transparent);pointer-events:none}
-    .glossy-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(76,175,130,.45)}
     .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:780px;margin:20px auto 28px;padding:0 16px}
     .stat{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;box-shadow:0 2px 8px rgba(76,175,130,.06)}
     .stat-n{font-family:'Space Grotesk',sans-serif;font-size:1.35rem;font-weight:700;background:var(--grad2);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -183,12 +188,7 @@
 
   <div class="scanner-body">
     <div class="error-msg" id="errorMsg"></div>
-    <div class="scan-progress" id="scanProg">
-      <div class="scan-url" id="scanUrl"></div>
-      <div class="prog-steps" id="progSteps"></div>
-      <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
-      <div class="prog-label" id="progLabel">Initializing...</div>
-    </div>
+    <div class="scan-progress" id="scanProg"></div>
     <div class="result" id="result">
       <div class="result-top">
         <div class="score-circle" id="scoreCircle"></div>
@@ -203,7 +203,6 @@
       <div class="det-list" id="detList"></div>
       <div class="res-foot">
         <span class="foot-txt" id="footTxt"></span>
-        <button class="glossy-btn">View full report</button>
       </div>
     </div>
   </div>
