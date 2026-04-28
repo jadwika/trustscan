@@ -39,7 +39,8 @@ const SAFE_DOMAINS = [
   'whatsapp.com','telegram.org','microsoft.com','apple.com',
   'hotstar.com','jiocinema.com','netflix.com','primevideo.com',
   'sonyliv.com','zee5.com','mxplayer.in','voot.com','altbalaji.com',
-  'crunchyroll.com','disneyplus.com','spotify.com','gaana.com','jiosaavn.com'
+  'crunchyroll.com','disneyplus.com','spotify.com','gaana.com','jiosaavn.com',
+  'imdb.com','rottentomatoes.com','justwatch.com'
 ];
 
 const FAKE_EXTENSIONS = [
@@ -92,7 +93,7 @@ const BRAND_NAMES = [
   'crunchyroll','disney','spotify'
 ];
 
-// Known piracy sites for fast detection
+// Known piracy sites — fast detection without AI
 const HIGH_PIRACY = [
   'movierulz','tamilrockers','filmywap','filmyzilla','9xmovies',
   'isaimini','tamilyogi','piratebay','1337x','khatrimaza',
@@ -111,7 +112,9 @@ const MEDIUM_PIRACY = [
   'watchasian','koreandrama','animesuge','animeowl','animeflv',
   'kickassanime','animedao','animefreak','animehub',
   'lookmovie','soap2day','123chill','freemovies','hdeuropix',
-  'einthusan','bollyflix','moviesnation','wcostream','wcofun'
+  'einthusan','bollyflix','moviesnation','wcostream','wcofun',
+  'autoembed','turkish123','embedmovies','sflix','yomovies',
+  'openload','streamango','fmoviesz','watchseries','seriesfree'
 ];
 
 function isKnownSafe(url) {
@@ -142,10 +145,7 @@ function analyzeDomain(url) {
     let reasons = [];
     let detectedBrand = null;
 
-    if (FAKE_EXTENSIONS.includes(ext)) {
-      riskScore += 40;
-      reasons.push(`Suspicious extension .${ext}`);
-    }
+    if (FAKE_EXTENSIONS.includes(ext)) { riskScore += 40; reasons.push(`Suspicious extension .${ext}`); }
 
     const foundKeywords = FAKE_KEYWORDS.filter(k => domainName.includes(k));
     if (foundKeywords.length > 0) {
@@ -157,10 +157,7 @@ function analyzeDomain(url) {
     if (foundBrand) {
       detectedBrand = foundBrand;
       const isReal = SAFE_DOMAINS.some(d => hostname === d);
-      if (!isReal) {
-        riskScore += 50;
-        reasons.push(`Brand "${foundBrand}" impersonated`);
-      }
+      if (!isReal) { riskScore += 50; reasons.push(`Brand "${foundBrand}" impersonated`); }
     }
 
     if (/\d/.test(domainName)) { riskScore += 15; reasons.push('Numbers in domain'); }
@@ -176,10 +173,7 @@ function analyzeDomain(url) {
       hasBrandImpersonation: !!foundBrand && !SAFE_DOMAINS.some(d => hostname === d)
     };
   } catch {
-    return {
-      riskScore: 0, reasons: [], detectedBrand: null,
-      hasSuspiciousExt: false, hasFakeKeywords: false, hasBrandImpersonation: false
-    };
+    return { riskScore: 0, reasons: [], detectedBrand: null, hasSuspiciousExt: false, hasFakeKeywords: false, hasBrandImpersonation: false };
   }
 }
 
@@ -193,30 +187,17 @@ async function extractAndAnalyze(url) {
     const title = $('title').text();
     const metaDesc = $('meta[name="description"]').attr('content') || '';
     const metaKeywords = $('meta[name="keywords"]').attr('content') || '';
-
-    // Extract more content for better AI analysis
     const bodyText = $('body').text().toLowerCase();
     const headings = [];
-    $('h1, h2, h3').each((i, el) => {
-      if (i < 10) headings.push($(el).text().trim());
-    });
-
-    // Detect piracy signals from page content
-    const piracySignals = [
-      'watch online free','download free','free stream','watch hd free',
-      'free episodes','watch anime free','stream movies free',
-      'no subscription','watch without login','free download hd',
-      'latest episodes free','full movie free','series free'
-    ];
-    const piracyScore = piracySignals.filter(p => bodyText.includes(p)).length;
+    $('h1,h2,h3').each((i,el) => { if(i<10) headings.push($(el).text().trim()); });
 
     const hasAadhaar = bodyText.includes('aadhaar') || bodyText.includes('aadhar');
     const hasRegistrationFee = bodyText.includes('registration fee') || bodyText.includes('application fee');
     const hasBankDetails = bodyText.includes('account number') || bodyText.includes('ifsc');
 
-    const urgencyPhrases = ['limited time','hurry','act now','expires soon','last chance','only today','urgent','offer ends'];
-    const unrealisticPhrases = ['100% free','guaranteed','no questions asked','instant approval','100% authentic','100% original'];
-    const authoritySpoof = ['officially verified','government approved','rbi approved','100% legal','authorized dealer'];
+    const urgencyPhrases = ['limited time','hurry','act now','expires soon','last chance','only today','urgent'];
+    const unrealisticPhrases = ['100% free','guaranteed','no questions asked','instant approval','100% authentic'];
+    const authoritySpoof = ['officially verified','government approved','rbi approved','100% legal'];
     const fearPhrases = ['account suspended','your account will be','immediate action','warning','alert','blocked'];
 
     const urgencyCount = urgencyPhrases.filter(p => bodyText.includes(p)).length;
@@ -228,15 +209,13 @@ async function extractAndAnalyze(url) {
     return {
       title, metaDesc, metaKeywords,
       headings: headings.join(' | '),
-      piracyScore,
       formHarvesting: { hasAadhaar, hasRegistrationFee, hasBankDetails },
       manipulation: { urgencyCount, unrealisticCount, authoritySpoofCount, fearCount, manipulationScore },
-      // Send 3000 characters for much better AI analysis
       bodyText: bodyText.substring(0, 3000)
     };
   } catch {
     return {
-      title: '', metaDesc: '', metaKeywords: '', headings: '', piracyScore: 0,
+      title: '', metaDesc: '', metaKeywords: '', headings: '',
       formHarvesting: { hasAadhaar: false, hasRegistrationFee: false, hasBankDetails: false },
       manipulation: { urgencyCount:0, unrealisticCount:0, authoritySpoofCount:0, fearCount:0, manipulationScore:0 },
       bodyText: ''
@@ -267,7 +246,7 @@ async function analyzeWithGemini(url, assets, domainAnalysis) {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `
-You are a strict cybersecurity expert. Analyse this website thoroughly.
+You are a world-class cybersecurity expert. Your job is to judge websites accurately.
 
 URL: ${url}
 Page title: ${assets.title}
@@ -277,37 +256,43 @@ Page headings: ${assets.headings}
 Domain risk score: ${domainAnalysis.riskScore}/100
 Domain risk reasons: ${domainAnalysis.reasons.join(', ') || 'none'}
 Brand impersonation detected: ${domainAnalysis.detectedBrand || 'none'}
-Piracy signals found on page: ${assets.piracyScore}
 Asks for Aadhaar: ${assets.formHarvesting.hasAadhaar}
 Asks for registration fee: ${assets.formHarvesting.hasRegistrationFee}
 Asks for bank details: ${assets.formHarvesting.hasBankDetails}
 Manipulation score: ${assets.manipulation.manipulationScore}/100
-Page content (3000 chars): ${assets.bodyText}
+Page content: ${assets.bodyText}
 
-STEP 1 - CHECK FOR PIRACY FIRST:
-Read the page content carefully. If the site:
-- Streams or lets users watch movies, shows, anime, dramas for FREE without official license
-- Lets users download copyrighted movies, music, software for free
-- Contains words like "watch online free", "download hd free", "free episodes", "free anime"
-- Is clearly an unofficial streaming site (not Netflix, Hotstar, JioCinema, Crunchyroll etc.)
-Then category MUST be "Piracy" and trustScore MUST be below 15.
+YOUR JUDGEMENT RULES:
 
-STEP 2 - CHECK FOR FRAUD:
-- Domain risk above 60 = trustScore below 20
-- Domain risk above 40 = trustScore below 40
-- Asks for Aadhaar or bank details or fees = trustScore below 25
-- Brand impersonation = trustScore below 25
-- Only give trustScore above 80 if 100 percent certain it is legitimate
+RULE 1 - PIRACY:
+Use your knowledge of the internet to judge if this site is a piracy site.
+A piracy site streams or lets users download movies, shows, anime, dramas, 
+or music WITHOUT an official license or subscription.
+Known legal sites: YouTube, Netflix, Hotstar, JioCinema, Crunchyroll, 
+Prime Video, Spotify, Gaana, JioSaavn, SonyLIV, Zee5, MX Player.
+If the site is NOT one of these official platforms but offers free 
+streaming or downloading of copyrighted content then it is PIRACY.
+Piracy sites must get trustScore below 15 and category "Piracy".
+
+RULE 2 - FRAUD:
+If the domain impersonates a known brand = trustScore below 25.
+If domain risk above 60 = trustScore below 20.
+If asking for Aadhaar or bank details = trustScore below 25.
+Only give trustScore above 80 if you are 100 percent certain it is legitimate.
+
+RULE 3 - SAFE:
+Well known legitimate sites, official government sites, verified companies 
+= trustScore above 80.
 
 Respond ONLY in this exact JSON:
 {
   "isFake": true or false,
-  "brand": "impersonated brand name or null",
+  "brand": "impersonated brand or null",
   "category": "Shopping or Electronics or Grocery or Pharmacy or Food or Travel or Jewellery or Furniture or Footwear or Banking or Jobs or Government or Education or Piracy or Other",
   "riskLevel": "High or Medium or Low",
   "stolenAssets": "what the user will lose or none",
-  "reason": "one clear sentence explaining the verdict",
-  "shortMessage": "2-3 sentences mentioning the actual site name. For piracy explain it is illegal in India under IT Act 2000 and suggest legal alternatives. For fraud explain what will be stolen.",
+  "reason": "one clear sentence verdict",
+  "shortMessage": "2-3 sentences mentioning the actual site name. For piracy say it is illegal in India under IT Act 2000 and suggest JioCinema, Hotstar, or Netflix as legal alternatives. For fraud explain what will be stolen.",
   "trustScore": number 0-100
 }`;
 
@@ -334,21 +319,49 @@ Respond ONLY in this exact JSON:
 
 function detectCategory(url) {
   const l = url.toLowerCase();
-  if (l.includes('anime')||l.includes('drama')||l.includes('kdrama')||l.includes('kiss')||l.includes('stream')) return 'Piracy';
-  if (l.includes('job')||l.includes('sarkari')||l.includes('recruitment')||l.includes('ncs')) return 'Jobs';
+  if (l.includes('job')||l.includes('sarkari')||l.includes('recruitment')) return 'Jobs';
   if (l.includes('bank')||l.includes('sbi')||l.includes('kyc')||l.includes('upi')) return 'Banking';
-  if (l.includes('gov')||l.includes('govt')||l.includes('government')||l.includes('nic')) return 'Government';
-  if (l.includes('college')||l.includes('university')||l.includes('iit')||l.includes('edu')) return 'Education';
-  if (l.includes('medicine')||l.includes('pharma')||l.includes('health')||l.includes('medical')) return 'Pharmacy';
+  if (l.includes('gov')||l.includes('govt')||l.includes('government')) return 'Government';
+  if (l.includes('college')||l.includes('university')||l.includes('edu')) return 'Education';
+  if (l.includes('medicine')||l.includes('pharma')||l.includes('health')) return 'Pharmacy';
   if (l.includes('grocery')||l.includes('vegetable')||l.includes('organic')) return 'Grocery';
-  if (l.includes('flight')||l.includes('hotel')||l.includes('travel')||l.includes('tour')) return 'Travel';
+  if (l.includes('flight')||l.includes('hotel')||l.includes('travel')) return 'Travel';
   if (l.includes('gold')||l.includes('jewel')||l.includes('diamond')) return 'Jewellery';
   if (l.includes('furniture')||l.includes('sofa')||l.includes('bed')) return 'Furniture';
   if (l.includes('food')||l.includes('restaurant')||l.includes('delivery')) return 'Food';
   if (l.includes('mobile')||l.includes('laptop')||l.includes('electronics')) return 'Electronics';
   if (l.includes('shoe')||l.includes('footwear')||l.includes('sneaker')) return 'Footwear';
-  if (l.includes('shop')||l.includes('store')||l.includes('buy')||l.includes('deal')) return 'Shopping';
+  if (l.includes('shop')||l.includes('store')||l.includes('buy')) return 'Shopping';
   return 'Other';
+}
+
+function buildPiracyResponse(url, isBlacklisted, domainAnalysis, isHigh, customMessage) {
+  const trustScore = isHigh ? 5 : 12;
+  const shortMessage = customMessage ||
+    `This site illegally streams or distributes copyrighted content without any official license. This is illegal in India under IT Act 2000 and Copyright Act 1957. Your device is at high risk of malware from ads on this site. Use legal platforms like JioCinema, Hotstar, or Netflix instead.`;
+  return {
+    url, trustScore,
+    isFake: false, brand: null,
+    category: 'Piracy', riskLevel: 'High',
+    shortMessage,
+    stolenAssets: 'Copyrighted movies, shows, and content',
+    reason: 'Illegal piracy website — streams copyrighted content without license',
+    signals: {
+      blacklisted: isBlacklisted, suspiciousDomain: true,
+      hasSuspiciousExt: domainAnalysis.hasSuspiciousExt,
+      hasBrandImpersonation: false,
+      domainAge: 'Unknown', sslValid: false, sslIssuer: 'Unknown',
+      formHarvesting: 'Malware and ad injection risk',
+      manipulationScore: 80,
+      urgencyLanguage: false, unrealisticPromises: false,
+      domainRiskReasons: [
+        'Illegal free streaming of copyrighted content',
+        'Violates IT Act 2000 and Copyright Act 1957',
+        'High malware risk from ads',
+        'No official streaming license'
+      ]
+    }
+  };
 }
 
 app.post('/scan', async (req, res) => {
@@ -358,7 +371,7 @@ app.post('/scan', async (req, res) => {
   try {
     console.log('Scanning:', url);
 
-    // Step 1 — known safe domains
+    // Step 1 — verified safe domains
     if (isKnownSafe(url)) {
       return res.json({
         url, trustScore: 97, isFake: false, brand: null,
@@ -378,39 +391,13 @@ app.post('/scan', async (req, res) => {
 
     const domainAnalysis = analyzeDomain(url);
 
-    // Step 2 — known piracy list (fast, no AI needed)
+    // Step 2 — known piracy list (instant, no AI needed)
     const piracyCheck = checkKnownPiracy(url);
     if (piracyCheck.isHigh || piracyCheck.isMedium) {
-      const trustScore = piracyCheck.isHigh ? 5 : 15;
-      const shortMessage = piracyCheck.isHigh
-        ? `This is a major illegal piracy website banned multiple times by the Indian government under IT Act 2000 and Copyright Act 1957. Every ad on this site can install malware on your device and expose you to legal action. Use legal alternatives like JioCinema, Hotstar, or Netflix instead.`
-        : `This site illegally streams or distributes copyrighted content without permission. It may contain malicious ads that harm your device. Accessing piracy sites is illegal in India. Use legal platforms like JioCinema, Crunchyroll, or Hotstar instead.`;
-
-      return res.json({
-        url, trustScore,
-        isFake: false, brand: null,
-        category: 'Piracy', riskLevel: 'High',
-        shortMessage,
-        stolenAssets: 'Copyrighted movies, shows, and content',
-        reason: 'Illegal piracy website — distributes copyrighted content without permission',
-        signals: {
-          blacklisted: true, suspiciousDomain: true,
-          hasSuspiciousExt: false, hasBrandImpersonation: false,
-          domainAge: 'Unknown', sslValid: false, sslIssuer: 'Unknown',
-          formHarvesting: 'Malware and ad injection risk',
-          manipulationScore: 80,
-          urgencyLanguage: false, unrealisticPromises: false,
-          domainRiskReasons: [
-            'Illegal piracy website',
-            'Distributes copyrighted content without license',
-            'High malware and virus risk',
-            'Banned under Indian IT Act 2000'
-          ]
-        }
-      });
+      return res.json(buildPiracyResponse(url, false, domainAnalysis, piracyCheck.isHigh, null));
     }
 
-    // Step 3 — very high risk domain, skip AI
+    // Step 3 — very high risk domain
     if (domainAnalysis.riskScore >= 80) {
       const trustScore = Math.max(3, 15 - domainAnalysis.riskScore / 10);
       return res.json({
@@ -423,7 +410,7 @@ app.post('/scan', async (req, res) => {
         reason: domainAnalysis.reasons.join(' · '),
         shortMessage: domainAnalysis.hasBrandImpersonation
           ? `This site is impersonating ${domainAnalysis.detectedBrand} to steal your personal and financial details. It has no connection to the real ${domainAnalysis.detectedBrand}. Do not enter any payment information or personal details.`
-          : `This website shows multiple high-risk signals. It is likely designed to deceive users into sharing personal details or making payments. Do not trust this site.`,
+          : `This website shows multiple high-risk signals. It is likely designed to deceive users. Do not enter any personal details or make any payments here.`,
         signals: {
           blacklisted: false, suspiciousDomain: true,
           hasSuspiciousExt: domainAnalysis.hasSuspiciousExt,
@@ -435,42 +422,23 @@ app.post('/scan', async (req, res) => {
       });
     }
 
-    // Step 4 — deep analysis with page content + Gemini AI
+    // Step 4 — fetch page content + Safe Browsing
     const [assets, isBlacklisted] = await Promise.all([
       extractAndAnalyze(url),
       checkSafeBrowsing(url)
     ]);
 
-    // If page content has piracy signals, boost them before Gemini
-    if (assets.piracyScore >= 3) {
-      console.log('Piracy signals detected on page:', assets.piracyScore);
-    }
-
+    // Step 5 — Gemini AI is the main judge
+    // Gemini reads URL + title + headings + full page content
+    // and uses its own knowledge to decide if site is piracy, fraud, or safe
     const geminiResult = await analyzeWithGemini(url, assets, domainAnalysis);
 
-    // Step 5 — if Gemini detected piracy from page content
+    // Step 6 — if Gemini says piracy
     if (geminiResult.category === 'Piracy') {
-      return res.json({
-        url,
-        trustScore: Math.min(geminiResult.trustScore || 12, 15),
-        isFake: false, brand: null,
-        category: 'Piracy', riskLevel: 'High',
-        shortMessage: geminiResult.shortMessage,
-        stolenAssets: 'Copyrighted movies, shows, and content',
-        reason: geminiResult.reason,
-        signals: {
-          blacklisted: isBlacklisted, suspiciousDomain: true,
-          hasSuspiciousExt: domainAnalysis.hasSuspiciousExt,
-          hasBrandImpersonation: false,
-          domainAge: 'Cloud mode', sslValid: true, sslIssuer: 'Cloud mode',
-          formHarvesting: 'Malware and ad injection risk',
-          manipulationScore: 80,
-          urgencyLanguage: false, unrealisticPromises: false,
-          domainRiskReasons: ['Piracy detected from page content analysis', 'Illegal content distribution']
-        }
-      });
+      return res.json(buildPiracyResponse(url, isBlacklisted, domainAnalysis, false, geminiResult.shortMessage));
     }
 
+    // Step 7 — calculate final trust score
     let trustScore = geminiResult.trustScore;
 
     if (domainAnalysis.riskScore >= 50) trustScore = Math.min(trustScore, 25);
@@ -481,7 +449,6 @@ app.post('/scan', async (req, res) => {
     if (assets.formHarvesting.hasBankDetails) trustScore -= 35;
     if (assets.manipulation.manipulationScore > 50) trustScore -= 30;
     else if (assets.manipulation.manipulationScore > 25) trustScore -= 15;
-    if (assets.piracyScore >= 3) trustScore = Math.min(trustScore, 20);
 
     trustScore = Math.max(0, Math.min(100, Math.round(trustScore)));
 
