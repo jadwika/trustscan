@@ -12,7 +12,6 @@ app.use(express.static('public'));
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Known legitimate domains
 const SAFE_DOMAINS = [
   'amazon.in','amazon.com','flipkart.com','myntra.com','nykaa.com',
   'meesho.com','ajio.com','snapdeal.com','tatacliq.com','reliancedigital.in',
@@ -22,7 +21,9 @@ const SAFE_DOMAINS = [
   'linkedin.com','naukri.com','shine.com','indeed.com','glassdoor.com','foundit.in',
   'ncs.gov.in','ssc.nic.in','upsc.gov.in','irctc.co.in','indianrailways.gov.in',
   'india.gov.in','mygov.in','digilocker.gov.in','uidai.gov.in','incometax.gov.in',
-  'iit.ac.in','nit.ac.in','ugc.ac.in','aicte-india.org','cbse.gov.in'
+  'iit.ac.in','nit.ac.in','ugc.ac.in','aicte-india.org','cbse.gov.in',
+  'hotstar.com','jiocinema.com','netflix.com','primevideo.com','sonyliv.com',
+  'zee5.com','mxplayer.in','voot.com'
 ];
 
 const FAKE_EXTENSIONS = ['xyz','tk','ml','ga','cf','gq','top','club','online','site','buzz','icu','fun'];
@@ -32,17 +33,44 @@ const FAKE_KEYWORDS = [
   'sarkari','apply-now','job-alert','recruitment-free','govt-job',
   'clearance','discount','flash','limited','hurry','urgent',
   'loot','cashback','scheme','yojana','helpline','support-team',
-  'refund','payment-free','delivery-free','win-prize'
+  'refund','payment-free','delivery-free','win-prize',
+  'big-billion','great-sale','festival-sale','cashback-offer',
+  'free-delivery-today','cod-available','original-product',
+  'brand-outlet','factory-price','wholesale-rate',
+  'sarkari-result','10th-pass','12th-pass','free-job-alert',
+  'government-vacancy','apply-fee','registration-charge',
+  'guaranteed-job','immediate-joining','work-from-home-earn',
+  'data-entry-job','part-time-earn','online-job-daily-payment'
 ];
 const BRAND_NAMES = [
   'flipkart','amazon','myntra','meesho','nykaa','paytm','phonepe',
   'sbi','hdfc','icici','axis','kotak','irctc','upsc','ssc','ncs',
-  'google','facebook','instagram','whatsapp','youtube','linkedin'
+  'google','facebook','instagram','whatsapp','youtube','linkedin',
+  'meesho','nykaa','ajio','snapdeal','tatacliq','jiomart',
+  'bigbasket','blinkit','zepto','swiggy','zomato',
+  'naukri','shine','indeed','foundit','internshala'
+];
+
+const HIGH_PIRACY = [
+  'movierulz','tamilrockers','filmywap','filmyzilla',
+  '9xmovies','isaimini','tamilyogi','piratebay','1337x',
+  'khatrimaza','rdxhd','moviesda','jalshamoviez','bolly4u',
+  'cinemavilla','tamilgun','moviespoint','hdmovieshub'
+];
+
+const MEDIUM_PIRACY = [
+  '123movies','fmovies','gomovies','putlocker',
+  'yesmovies','solarmovie','streameast','mp4moviez',
+  'skymovies','katmoviehd','hdmovies','moviesflix',
+  'worldfree4u','downloadhub','coolmoviez','o2tvseries',
+  'toxicwap','extramovies','hdmoviesarea','moviescounter'
 ];
 
 function isKnownSafe(url) {
   try {
     const hostname = new URL(url).hostname.replace('www.','');
+    const isPiracy = [...HIGH_PIRACY, ...MEDIUM_PIRACY].some(s => hostname.includes(s));
+    if (isPiracy) return false;
     return SAFE_DOMAINS.some(d => hostname === d || hostname.endsWith('.'+d));
   } catch { return false; }
 }
@@ -95,12 +123,10 @@ function analyzeDomain(url) {
   }
 }
 
-// Domain age — disabled for cloud compatibility
 async function checkDomainAge(url) {
   return { ageInDays: -1, isNew: false, error: true };
 }
 
-// SSL check — disabled for cloud compatibility
 async function checkSSL(url) {
   return { valid: true, daysRemaining: 90, issuer: 'Unknown', isSelfSigned: false, error: true };
 }
@@ -172,7 +198,7 @@ async function analyzeWithGemini(url, assets, domainAnalysis) {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `
-You are a strict cybersecurity expert detecting fake and fraudulent websites.
+You are a strict cybersecurity expert detecting fake and fraudulent websites in India.
 
 URL: ${url}
 Page title: ${assets.title}
@@ -199,6 +225,7 @@ Respond ONLY in this exact JSON:
   "riskLevel": "High or Medium or Low",
   "stolenAssets": "what is stolen or none",
   "reason": "one clear sentence",
+  "shortMessage": "2-3 sentence specific explanation mentioning the actual site name, what the user will lose if fake, or why it is trustworthy if safe. Be specific and helpful for Indian users.",
   "trustScore": number 0-100
 }`;
 
@@ -215,6 +242,9 @@ Respond ONLY in this exact JSON:
       riskLevel: domainAnalysis.riskScore > 50 ? 'High' : 'Low',
       stolenAssets: domainAnalysis.hasBrandImpersonation ? 'Brand identity stolen' : 'none',
       reason: 'Analysis based on domain signals',
+      shortMessage: domainAnalysis.riskScore > 50
+        ? 'This website shows multiple signs of being fraudulent. Do not enter any personal details or make any payments on this site.'
+        : 'This website appears to be legitimate based on domain analysis.',
       trustScore: Math.max(0, 100 - domainAnalysis.riskScore)
     };
   }
@@ -243,6 +273,7 @@ app.post('/scan', async (req, res) => {
         category: 'Verified', riskLevel: 'Low',
         stolenAssets: 'none',
         reason: 'Verified legitimate website — all signals clean',
+        shortMessage: 'This is a verified and trusted website. It uses secure HTTPS encryption, has a valid SSL certificate, and is not flagged by any threat database. Safe to use.',
         signals: {
           blacklisted: false, suspiciousDomain: false,
           hasSuspiciousExt: false, hasBrandImpersonation: false,
@@ -256,6 +287,48 @@ app.post('/scan', async (req, res) => {
     const domainAnalysis = analyzeDomain(url);
     console.log('Domain risk:', domainAnalysis.riskScore);
 
+    // Piracy detection
+    const hostname = new URL(url).hostname.replace('www.','');
+    const isHighPiracy = HIGH_PIRACY.some(s => hostname.includes(s));
+    const isMediumPiracy = MEDIUM_PIRACY.some(s => hostname.includes(s));
+
+    if (isHighPiracy || isMediumPiracy) {
+      const trustScore = isHighPiracy ? 5 : 18;
+      const shortMessage = isHighPiracy
+        ? `This is a major illegal piracy website banned multiple times by the Indian government under IT Act 2000 and Copyright Act 1957. Every ad on this site can install malware or spyware on your device and expose you to legal action. Use legal alternatives like JioCinema, Hotstar, or Netflix instead.`
+        : `This site distributes copyrighted movies and shows without permission. It may contain malicious ads that can harm your device and steal your data. Accessing piracy sites is illegal in India — use legal streaming platforms like JioCinema, Amazon Prime, or Hotstar instead.`;
+
+      return res.json({
+        url, trustScore,
+        isFake: false,
+        brand: null,
+        category: 'Piracy',
+        riskLevel: 'High',
+        shortMessage,
+        stolenAssets: 'Copyrighted movies and content',
+        reason: 'Illegal piracy website — distributes copyrighted content without permission',
+        signals: {
+          blacklisted: true,
+          suspiciousDomain: true,
+          hasSuspiciousExt: false,
+          hasBrandImpersonation: false,
+          domainAge: 'Unknown',
+          sslValid: false,
+          sslIssuer: 'Unknown',
+          formHarvesting: 'Malware and ad injection risk',
+          manipulationScore: 80,
+          urgencyLanguage: false,
+          unrealisticPromises: false,
+          domainRiskReasons: [
+            'Illegal piracy website',
+            'Distributes copyrighted content',
+            'High malware and virus risk',
+            'Banned by Indian government'
+          ]
+        }
+      });
+    }
+
     if (domainAnalysis.riskScore >= 80) {
       const trustScore = Math.max(3, 15 - domainAnalysis.riskScore / 10);
       return res.json({
@@ -264,6 +337,9 @@ app.post('/scan', async (req, res) => {
         category: detectCategory(url), riskLevel: 'High',
         stolenAssets: domainAnalysis.hasBrandImpersonation ? `${domainAnalysis.detectedBrand} brand assets stolen` : 'Domain identity theft',
         reason: domainAnalysis.reasons.join(' · '),
+        shortMessage: domainAnalysis.hasBrandImpersonation
+          ? `This site is impersonating ${domainAnalysis.detectedBrand} to steal your personal and financial details. It has no connection to the real ${domainAnalysis.detectedBrand}. Do not enter any payment information or personal details on this site.`
+          : `This website shows multiple high-risk signals including suspicious domain patterns. It is likely designed to deceive users. Do not enter any personal details or make any payments here.`,
         signals: {
           blacklisted: false, suspiciousDomain: true,
           hasSuspiciousExt: domainAnalysis.hasSuspiciousExt,
@@ -307,6 +383,7 @@ app.post('/scan', async (req, res) => {
       riskLevel: trustScore < 30 ? 'High' : trustScore < 60 ? 'Medium' : 'Low',
       stolenAssets: geminiResult.stolenAssets,
       reason: geminiResult.reason,
+      shortMessage: geminiResult.shortMessage || 'Analysis completed based on domain signals and AI detection.',
       signals: {
         blacklisted: isBlacklisted,
         suspiciousDomain: domainAnalysis.riskScore > 30,

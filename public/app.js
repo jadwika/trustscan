@@ -92,7 +92,11 @@ function showResult(data) {
 
   // Title and verdict
   let title, verdict, vcls;
-  if (score >= 60) {
+  if (data.category === 'Piracy') {
+    title = 'Illegal — piracy website';
+    verdict = 'Warning — ' + (data.reason || 'illegal piracy site');
+    vcls = 'v-warn';
+  } else if (score >= 60) {
     title = 'Legitimate website';
     verdict = 'Verified — this website appears safe to use';
     vcls = 'v-safe';
@@ -113,7 +117,58 @@ function showResult(data) {
   rv.className = 'res-verdict ' + vcls;
   document.getElementById('catBadge').innerHTML = `<div class="cat-badge">${data.category || 'Website'}</div>`;
 
-  // Build signals using ALL new data
+  // SHORT MESSAGE BOX — injected right after result-top
+  const existingMsg = document.getElementById('shortMsgBox');
+  if (existingMsg) existingMsg.remove();
+
+  if (data.shortMessage) {
+    let msgBg, msgBorder, msgIcon, msgLabelColor, msgLabel, msgTextColor;
+
+    if (data.category === 'Piracy') {
+      msgBg = '#fff8e1'; msgBorder = '#ffe082';
+      msgIcon = '⚠️'; msgLabelColor = '#e65100';
+      msgLabel = 'Why this is dangerous';
+      msgTextColor = '#bf360c';
+    } else if (score >= 60) {
+      msgBg = '#edfaf3'; msgBorder = '#c8ecd8';
+      msgIcon = '✅'; msgLabelColor = '#2e7d32';
+      msgLabel = 'Why this is safe';
+      msgTextColor = '#1b5e3a';
+    } else if (score >= 30) {
+      msgBg = '#fff8e1'; msgBorder = '#ffe082';
+      msgIcon = '⚠️'; msgLabelColor = '#e65100';
+      msgLabel = 'Why you should be careful';
+      msgTextColor = '#bf360c';
+    } else {
+      msgBg = '#ffebee'; msgBorder = '#ffcdd2';
+      msgIcon = '🚨'; msgLabelColor = '#c62828';
+      msgLabel = 'Why this is dangerous';
+      msgTextColor = '#b71c1c';
+    }
+
+    const msgBox = document.createElement('div');
+    msgBox.id = 'shortMsgBox';
+    msgBox.style.cssText = `
+      padding: 14px 22px;
+      border-bottom: 1px solid ${msgBorder};
+      background: ${msgBg};
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    `;
+    msgBox.innerHTML = `
+      <div style="width:36px;height:36px;border-radius:10px;background:${msgBorder};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px">${msgIcon}</div>
+      <div>
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:${msgLabelColor};margin-bottom:5px;font-family:'Inter',sans-serif">${msgLabel}</div>
+        <div style="font-size:13px;line-height:1.65;color:${msgTextColor};font-family:'Inter',sans-serif">${data.shortMessage}</div>
+      </div>
+    `;
+
+    const resultTop = document.querySelector('.result-top');
+    resultTop.insertAdjacentElement('afterend', msgBox);
+  }
+
+  // Build signals
   const signals = [
     {
       l: 'Domain signals',
@@ -195,7 +250,7 @@ function showResult(data) {
     {
       k: 'Category',
       v: data.category || 'Unknown',
-      t: 't-safe'
+      t: data.category === 'Piracy' ? 't-warn' : 't-safe'
     },
     {
       k: 'Stolen assets',
@@ -227,7 +282,9 @@ function showResult(data) {
 
   // Footer message
   document.getElementById('footTxt').textContent =
-    score < 30
+    data.category === 'Piracy'
+      ? '⚠️ Visiting piracy sites is illegal in India — use JioCinema, Hotstar or Netflix instead'
+      : score < 30
       ? '🚨 Do not enter personal details, pay money, or share documents on this site'
       : score < 60
       ? '⚠️ Proceed with caution — verify this site before making any payment'
