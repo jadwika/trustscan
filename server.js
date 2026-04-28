@@ -321,7 +321,37 @@ app.post('/scan', async (req, res) => {
       return res.json(buildPiracyResponse(url, false, null));
     }
 
-    // Step 3 — fetch page content + Safe Browsing in parallel
+    // Step 3 — domain analysis (needed for fallback scoring)
+    const domainAnalysis = analyzeDomain(url);
+    console.log('Domain risk:', domainAnalysis.riskScore);
+
+    // Step 4 — very high risk domain — skip AI
+    if (domainAnalysis.riskScore >= 80) {
+      const trustScore = Math.max(3, 15 - domainAnalysis.riskScore / 10);
+      return res.json({
+        url, trustScore: Math.round(trustScore),
+        isFake: true, brand: domainAnalysis.detectedBrand,
+        category: detectCategory(url), riskLevel: 'High',
+        stolenAssets: domainAnalysis.hasBrandImpersonation
+          ? `${domainAnalysis.detectedBrand} brand assets stolen`
+          : 'Domain identity theft',
+        reason: domainAnalysis.reasons.join(' · '),
+        shortMessage: domainAnalysis.hasBrandImpersonation
+          ? `This site is impersonating ${domainAnalysis.detectedBrand} to steal your personal and financial details. It has no connection to the real ${domainAnalysis.detectedBrand}. Do not enter any payment information or personal details.`
+          : `This website shows multiple high-risk signals. It is likely designed to deceive users. Do not enter any personal details or make any payments here.`,
+        signals: {
+          blacklisted: false, suspiciousDomain: true,
+          hasSuspiciousExt: domainAnalysis.hasSuspiciousExt,
+          hasBrandImpersonation: domainAnalysis.hasBrandImpersonation,
+          domainAge: 'Unknown', sslValid: false,
+          formHarvesting: 'Not checked', manipulationScore: 0,
+          urgencyLanguage: false, unrealisticPromises: false,
+          domainRiskReasons: domainAnalysis.reasons
+        }
+      });
+    }
+
+    // Step 5 — fetch page content + Safe Browsing in parallel
     const [assets, isBlacklisted] = await Promise.all([
       extractAndAnalyze(url),
       checkSafeBrowsing(url)
